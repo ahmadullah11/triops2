@@ -56,12 +56,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	mux.HandleFunc("GET /stock/{productId}", getStock(pool))
-	mux.HandleFunc("POST /stock/reserve", reserveStock(pool))
+	mux := newMux(pool)
 
 	srv := &http.Server{Addr: ":" + port, Handler: logRequests(mux)}
 
@@ -80,6 +75,19 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+}
+
+// newMux wires the routes. It is separate from main so tests can build the same
+// router without a database connection (a nil pool is safe for handlers that
+// reject invalid input before touching the database).
+func newMux(pool *pgxpool.Pool) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /stock/{productId}", getStock(pool))
+	mux.HandleFunc("POST /stock/reserve", reserveStock(pool))
+	return mux
 }
 
 func getStock(pool *pgxpool.Pool) http.HandlerFunc {
